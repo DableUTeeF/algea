@@ -43,8 +43,8 @@ class CustomTensorBoard(TensorBoard):
             s = sess.run(summary)
             self.writer.add_summary(s)
 
-    def on_epoch_begin(self, epoch, logs=None):
-        print(f'\033[{np.random.randint(31, 37)}m')
+    # def on_epoch_end(self, epoch, logs=None):
+    #     print(f'\033[{np.random.randint(31, 37)}m')
 
 
 class CustomModelCheckpoint(ModelCheckpoint):
@@ -73,6 +73,7 @@ class CustomModelCheckpoint(ModelCheckpoint):
                                   ' saving model to %s'
                                   % (epoch + 1, self.monitor, self.best,
                                      current, filepath))
+                            print(f'\033[{np.random.randint(31, 37)}m')
                         self.best = current
                         if self.save_weights_only:
                             self.model_to_save.save_weights(filepath, overwrite=True)
@@ -85,9 +86,9 @@ class CustomModelCheckpoint(ModelCheckpoint):
             else:
                 if self.verbose > 0:
                     print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                    print(f'\033[{np.random.randint(31, 37)}m')
                 if self.save_weights_only:
                     self.model_to_save.save_weights(filepath, overwrite=True)
                 else:
                     self.model_to_save.save(filepath, overwrite=True)
-
         super(CustomModelCheckpoint, self).on_batch_end(epoch, logs)

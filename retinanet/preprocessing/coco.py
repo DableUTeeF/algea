@@ -36,9 +36,9 @@ class CocoGenerator(Generator):
             data_dir: Path to where the COCO dataset is stored.
             set_name: Name of the set to parse.
         """
-        self.data_dir = data_dir
-        self.set_name = set_name
-        self.coco = COCO(os.path.join(data_dir, 'annotations', 'instances_' + set_name + '.json'))
+        self.data_dir  = data_dir
+        self.set_name  = set_name
+        self.coco      = COCO(os.path.join(data_dir, 'annotations', 'instances_' + set_name + '.json'))
         self.image_ids = self.coco.getImgIds()
 
         self.load_classes()
@@ -52,8 +52,8 @@ class CocoGenerator(Generator):
         categories = self.coco.loadCats(self.coco.getCatIds())
         categories.sort(key=lambda x: x['id'])
 
-        self.classes = {}
-        self.coco_labels = {}
+        self.classes             = {}
+        self.coco_labels         = {}
         self.coco_labels_inverse = {}
         for c in categories:
             self.coco_labels[len(self.classes)] = c['id']
@@ -121,7 +121,7 @@ class CocoGenerator(Generator):
         """ Load an image at the image_index.
         """
         image_info = self.coco.loadImgs(self.image_ids[image_index])[0]
-        path = os.path.join(self.data_dir, 'images', self.set_name, image_info['file_name'])
+        path       = os.path.join(self.data_dir, 'images', self.set_name, image_info['file_name'])
         return read_image_bgr(path)
 
     def load_annotations(self, image_index):
@@ -129,7 +129,7 @@ class CocoGenerator(Generator):
         """
         # get ground truth annotations
         annotations_ids = self.coco.getAnnIds(imgIds=self.image_ids[image_index], iscrowd=False)
-        annotations = {'labels': np.empty((0,)), 'bboxes': np.empty((0, 4))}
+        annotations     = {'labels': np.empty((0,)), 'bboxes': np.empty((0, 4))}
 
         # some images appear to miss annotations (like image with id 257034)
         if len(annotations_ids) == 0:
@@ -142,8 +142,7 @@ class CocoGenerator(Generator):
             if a['bbox'][2] < 1 or a['bbox'][3] < 1:
                 continue
 
-            annotations['labels'] = np.concatenate(
-                [annotations['labels'], [self.coco_label_to_label(a['category_id'])]], axis=0)
+            annotations['labels'] = np.concatenate([annotations['labels'], [self.coco_label_to_label(a['category_id'])]], axis=0)
             annotations['bboxes'] = np.concatenate([annotations['bboxes'], [[
                 a['bbox'][0],
                 a['bbox'][1],

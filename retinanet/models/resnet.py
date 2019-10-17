@@ -22,7 +22,7 @@ import keras_resnet.models
 from . import retinanet
 from . import Backbone
 from ..utils.image import preprocess_image
-from classification_models.resnet import ResNet18, ResNet50, ResNet34
+from classification_models.resnet import ResNet18, preprocess_input, ResNet34
 
 
 class ResNetBackbone(Backbone):
@@ -61,10 +61,6 @@ class ResNetBackbone(Backbone):
             checksum = '2ac8277412f65e5d047f255bcbd10383'
             filename = 'resnet34_imagenet_1000.h5'
             resource = 'https://github.com/qubvel/classification_models/releases/download/0.0.1/resnet34_imagenet_1000.h5'
-        if depth == 50:
-            checksum = 'd0feba4fc650e68ac8c19166ee1ba87f'
-            filename = 'resnet50_imagenet_1000.h5'
-            resource = 'https://github.com/qubvel/classification_models/releases/download/0.0.1/resnet50_imagenet_1000.h5'
 
         return get_file(
             filename,
@@ -112,12 +108,6 @@ def resnet_retinanet(num_classes, backbone='resnet50', inputs=None, modifier=Non
     # create the resnet backbone
     if backbone == 'resnet50':
         resnet = keras_resnet.models.ResNet50(inputs, include_top=False, freeze_bn=True)
-        # resnet = ResNet50(None, input_tensor=inputs, weights=None, include_top=False)
-        # layer_names = ['stage3_unit1_relu1', 'stage4_unit1_relu1', 'relu1']
-        # layer_outputs = [resnet.get_layer(name).output for name in layer_names]
-        # resnet = keras.models.Model(inputs=inputs, outputs=layer_outputs, name=resnet.name)
-        # return retinanet.retinanet(inputs=inputs, num_classes=num_classes, backbone_layers=resnet.outputs, **kwargs)
-
     elif backbone == 'resnet101':
         resnet = keras_resnet.models.ResNet101(inputs, include_top=False, freeze_bn=True)
     elif backbone == 'resnet152':

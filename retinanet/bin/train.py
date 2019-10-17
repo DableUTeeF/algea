@@ -35,7 +35,7 @@ if __name__ == "__main__" and __package__ is None:
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
 from .. import losses
 from .. import models
-from ..callbacks import RedirectModel, CustomTensorBoard
+from ..callbacks import RedirectModel, CustomTensorBoard, CustomModelCheckpoint
 from ..callbacks.eval import Evaluate
 from ..models.retinanet import retinanet_bbox
 from ..preprocessing.csv_generator import CSVGenerator
@@ -130,7 +130,7 @@ def create_models(backbone_retinanet, num_classes, weights, multi_gpu=0,
             'regression': losses.smooth_l1(),
             'classification': losses.focal()
         },
-        optimizer=keras.optimizers.sgd(lr=lr, momentum=0.9, clipnorm=0.001)
+        optimizer=keras.optimizers.adam(lr=lr, clipnorm=0.001)
     )
 
     return model, training_model, prediction_model
@@ -184,8 +184,9 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
     if args.snapshots:
         # ensure directory created first; otherwise h5py will error after epoch.
         makedirs(args.snapshot_path)
-        checkpoint = keras.callbacks.ModelCheckpoint(
-            os.path.join(
+        checkpoint = CustomModelCheckpoint(
+            model,
+            filepath=os.path.join(
                 args.snapshot_path,
                 '{backbone}_{dataset_type}_{{epoch:02d}}.h5'.format(backbone=args.backbone,
                                                                     dataset_type=args.dataset_type)
@@ -197,15 +198,17 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
         )
         checkpoint = RedirectModel(checkpoint, model)
         callbacks.append(checkpoint)
-    def sc(epoch):
-        if 0 < epoch < 7:
-            return 5e-3
-        elif 12 < epoch < 16:
-            return 5e-4
-        else:
-            return 5e-5
 
-    callbacks.append(keras.callbacks.LearningRateScheduler(sc))
+    callbacks.append(keras.callbacks.ReduceLROnPlateau(
+        monitor='loss',
+        factor=0.1,
+        patience=2,
+        verbose=1,
+        mode='auto',
+        min_delta=0.0001,
+        cooldown=0,
+        min_lr=0
+    ))
 
     return callbacks
 
@@ -250,7 +253,6 @@ def create_generators(args, preprocess_image):
             args.coco_path,
             'train2017',
             transform_generator=transform_generator,
-            # crop=args.crop,
             **common_args
         )
 
@@ -264,12 +266,11 @@ def create_generators(args, preprocess_image):
             args.pascal_path,
             'trainval',
             transform_generator=transform_generator,
-            # crop=args.crop,
             **common_args
         )
 
         validation_generator = PascalVocGenerator(
-            args.pascal_val_path,
+            args.pascal_path,
             'test',
             **common_args
         )
@@ -278,7 +279,6 @@ def create_generators(args, preprocess_image):
             args.annotations,
             args.classes,
             transform_generator=transform_generator,
-            # crop=args.crop,
             **common_args
         )
 
@@ -299,7 +299,6 @@ def create_generators(args, preprocess_image):
             annotation_cache_dir=args.annotation_cache_dir,
             parent_label=args.parent_label,
             transform_generator=transform_generator,
-            # crop=args.crop,
             **common_args
         )
 
@@ -376,7 +375,6 @@ def parse_args(args):
 
     pascal_parser = subparsers.add_parser('pascal')
     pascal_parser.add_argument('pascal_path', help='Path to dataset directory (ie. /tmp/VOCdevkit).')
-    pascal_parser.add_argument('pascal_val_path', help='Path to dataset directory (ie. /tmp/VOCdevkit).')
 
     kitti_parser = subparsers.add_parser('kitti')
     kitti_parser.add_argument('kitti_path', help='Path to dataset directory (ie. /tmp/kitti).')
@@ -414,8 +412,7 @@ def parse_args(args):
                         action='store_true')
     parser.add_argument('--epochs', help='Number of epochs to train.', type=int, default=50)
     parser.add_argument('--steps', help='Number of steps per epoch.', type=int, default=10000)
-    parser.add_argument('--lr', help='Learning rate.', type=float, default=6.25e-4)
-    # parser.add_argument('--crop', help='Crop each image to (min_size, min_size).', type=int, default=1)
+    parser.add_argument('--lr', help='Learning rate.', type=float, default=1e-5)
     parser.add_argument('--snapshot-path',
                         help='Path to store snapshots of models during training (defaults to \'./snapshots\')',
                         default='./snapshots')
@@ -527,8 +524,7 @@ def main(args=None):
         callbacks=callbacks,
         workers=args.workers,
         use_multiprocessing=use_multiprocessing,
-        max_queue_size=args.max_queue_size,
-        initial_epoch=len(os.listdir(args.snapshot_path)) if os.path.isdir(args.snapshot_path) else 0
+        max_queue_size=args.max_queue_size
     )
 
 

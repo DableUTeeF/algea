@@ -34,22 +34,22 @@ class Anchors(keras.layers.Layer):
             ratios: The ratios of the anchors to generate (defaults to AnchorParameters.default.ratios).
             scales: The scales of the anchors to generate (defaults to AnchorParameters.default.scales).
         """
-        self.size = size
+        self.size   = size
         self.stride = stride
         self.ratios = ratios
         self.scales = scales
 
         if ratios is None:
-            self.ratios = utils_anchors.AnchorParameters.default.ratios
+            self.ratios  = utils_anchors.AnchorParameters.default.ratios
         elif isinstance(ratios, list):
-            self.ratios = np.array(ratios)
+            self.ratios  = np.array(ratios)
         if scales is None:
-            self.scales = utils_anchors.AnchorParameters.default.scales
+            self.scales  = utils_anchors.AnchorParameters.default.scales
         elif isinstance(scales, list):
-            self.scales = np.array(scales)
+            self.scales  = np.array(scales)
 
         self.num_anchors = len(ratios) * len(scales)
-        self.anchors = keras.backend.variable(utils_anchors.generate_anchors(
+        self.anchors     = keras.backend.variable(utils_anchors.generate_anchors(
             base_size=size,
             ratios=ratios,
             scales=scales,
@@ -84,10 +84,10 @@ class Anchors(keras.layers.Layer):
     def get_config(self):
         config = super(Anchors, self).get_config()
         config.update({
-            'size': self.size,
-            'stride': self.stride,
-            'ratios': self.ratios.tolist(),
-            'scales': self.scales.tolist(),
+            'size'   : self.size,
+            'stride' : self.stride,
+            'ratios' : self.ratios.tolist(),
+            'scales' : self.scales.tolist(),
         })
 
         return config
@@ -142,7 +142,7 @@ class RegressBoxes(keras.layers.Layer):
             raise ValueError('Expected std to be a np.ndarray, list or tuple. Received: {}'.format(type(std)))
 
         self.mean = mean
-        self.std = std
+        self.std  = std
         super(RegressBoxes, self).__init__(*args, **kwargs)
 
     def call(self, inputs, **kwargs):
@@ -156,7 +156,7 @@ class RegressBoxes(keras.layers.Layer):
         config = super(RegressBoxes, self).get_config()
         config.update({
             'mean': self.mean.tolist(),
-            'std': self.std.tolist(),
+            'std' : self.std.tolist(),
         })
 
         return config
@@ -171,10 +171,10 @@ class ClipBoxes(keras.layers.Layer):
         shape = keras.backend.cast(keras.backend.shape(image), keras.backend.floatx())
         if keras.backend.image_data_format() == 'channels_first':
             height = shape[2]
-            width = shape[3]
+            width  = shape[3]
         else:
             height = shape[1]
-            width = shape[2]
+            width  = shape[2]
         x1 = backend.clip_by_value(boxes[:, :, 0], 0, width)
         y1 = backend.clip_by_value(boxes[:, :, 1], 0, height)
         x2 = backend.clip_by_value(boxes[:, :, 2], 0, width)

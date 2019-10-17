@@ -74,7 +74,6 @@ def evaluate_coco(generator, model, threshold=0.05):
         image_ids.append(generator.image_ids[index])
 
     if not len(results):
-        print('No predicted result')
         return
 
     # write output
