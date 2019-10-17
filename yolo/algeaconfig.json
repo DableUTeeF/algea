@@ -1,0 +1,33 @@
+{
+  "model": {
+    "backend": "B0DW",
+    "min_input_size": 320, "comment1": "256 might be better",
+    "max_input_size": 608,
+    "anchors": [12,19, 31,46, 45,113, 78,220, 93,55, 133,125, 166,288, 286,162, 343,345],
+    "labels": []
+  },
+  "train": {
+    "train_csv": "/home/palm/PycharmProjects/algea/dataset/train_annotations",
+    "classes_csv": "/home/palm/PycharmProjects/algea/dataset/classes",
+    "train_times": 5,
+    "batch_size": 8,
+    "opt": "sgd",
+    "learning_rate": 1e-2,
+    "nb_epochs": 30,
+    "warmup_epochs": 0,
+    "ignore_thresh": 0.5,
+    "gpus": "0",
+    "grid_scales": [1,1,1],
+    "obj_scale": 5,
+    "noobj_scale": 1,
+    "xywh_scale": 1,
+    "class_scale": 5,
+    "tensorboard_dir": "logs/",
+    "saved_weights_name": "weights/B0MB_coco_1.h5",
+    "debug": false
+  },
+  "valid": {
+    "valid_csv": "/home/palm/PycharmProjects/algea/dataset/test_annotations",
+    "valid_times": 1
+  }
+}
