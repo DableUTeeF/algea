@@ -1,20 +1,27 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import sys
+# noinspection PyUnboundLocalVariable
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+    __package__ = "yolo"
+
 from datetime import datetime
 import numpy as np
 import json
-from .y3frontend import *
-from .preprocessing import Y3BatchGenerator
-from .utils import normalize, evaluate, makedirs, parse_annotation, create_csv_training_instances
-from .callbacks import CustomModelCheckpoint, CustomTensorBoard
+from yolo.y3frontend import *
+from yolo.preprocessing import Y3BatchGenerator
+from yolo.utils import normalize, evaluate, makedirs, parse_annotation, create_csv_training_instances
+from yolo.callbacks import CustomModelCheckpoint, CustomTensorBoard
 import sys
-from keras.callbacks import EarlyStopping, ModelCheckpoint, LearningRateScheduler
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from keras import optimizers
 # EarlyStopping = tf.keras.callbacks.EarlyStopping
 # ReduceLROnPlateau = tf.keras.callbacks.ReduceLROnPlateau
 
 
-def create_callbacks(saved_weights_name, tensorboard_logs, config):
+def create_callbacks(saved_weights_name, model_to_save, tensorboard_logs, config):
     makedirs(tensorboard_logs)
 
     def sc(epoch):
@@ -25,25 +32,28 @@ def create_callbacks(saved_weights_name, tensorboard_logs, config):
         else:
             return 1e-5
     early_stop = EarlyStopping(
-        monitor='loss',
+        monitor='val_loss',
         min_delta=0.01,
         patience=5,
         mode='min',
         verbose=1
     )
-    checkpoint = ModelCheckpoint(
-        # model_to_save=model_to_save,
+    makedirs(os.path.join(*os.path.split(saved_weights_name)[:-1]))
+    checkpoint = CustomModelCheckpoint(
+        model_to_save=model_to_save,
         filepath=saved_weights_name,  # + '{epoch:02d}.h5',
         monitor='val_loss',
         verbose=1,
-        save_best_only=True,
+        # save_best_only=True,
         save_weights_only=True,
         mode='min',
         period=1
     )
-    reduce_on_plateau = LearningRateScheduler(
-        sc,
+    reduce_on_plateau = ReduceLROnPlateau(
+        patience=3,
         verbose=1,
+        mode='min',
+        min_lr=1e-6
     )
     now = datetime.now()
     dt = f'{now.year}-{now.month}-{now.day}_{now.hour}:{now.minute}:{now.second}'
@@ -55,7 +65,7 @@ def create_callbacks(saved_weights_name, tensorboard_logs, config):
         write_graph=False,
         write_images=True,
     )
-    return [checkpoint, reduce_on_plateau, tensorboard]
+    return [checkpoint, early_stop, reduce_on_plateau, tensorboard]
 
 
 def create_model(
@@ -74,11 +84,10 @@ def create_model(
         xywh_scale,
         class_scale,
         opt='rmsprop',
-        writer=None,
 ):
     template_model, infer_model = yolo3(
-            fe='effnetb0',
-            output_type='mb',
+            fe='effnetb3',
+            output_type='dw',
             nb_class=nb_class,
             anchors=anchors,
             max_box_per_image=max_box_per_image,
@@ -173,8 +182,6 @@ if __name__ == '__main__':
 
     multi_gpu = len(config['train']['gpus'].split(','))
 
-    callbacks = create_callbacks(config['train']['saved_weights_name'], config['train']['tensorboard_dir'], config_string)
-
     train_model, infer_model = create_model(
         nb_class=len(labels),
         anchors=config['model']['anchors'],
@@ -192,8 +199,8 @@ if __name__ == '__main__':
         xywh_scale=config['train']['xywh_scale'],
         class_scale=config['train']['class_scale'],
         opt=config['train']['opt'],
-        writer=callbacks[-1].writer
     )
+    callbacks = create_callbacks(config['train']['saved_weights_name'], infer_model, config['train']['tensorboard_dir'], config_string)
     ###############################
     #   Kick off the training
     ###############################

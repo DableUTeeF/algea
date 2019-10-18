@@ -261,7 +261,7 @@ def create_voc_training_instances(voc_folder):
     return train_ints, valid_ints, sorted(labels), max_box_per_image
 
 
-def create_csv_training_instances(train_csv, test_csv, class_csv):
+def create_csv_training_instances(train_csv, test_csv, class_csv, with_wh=False):
     with _open_for_csv(class_csv) as file:
         classes = _read_classes(csv.reader(file, delimiter=','))
     with _open_for_csv(train_csv) as file:
@@ -277,9 +277,14 @@ def create_csv_training_instances(train_csv, test_csv, class_csv):
         ints = {'filename': k, 'object': []}
         for i, obj in enumerate(image_data):
             o = {'xmin': obj['x1'], 'xmax': obj['x2'], 'ymin': obj['y1'], 'ymax': obj['y2'], 'name': obj['class']}
+            if with_wh:
+                x = cv2.imread(k)
+                height, width, _ = x.shape
+                o['width'] = width
+                o['height'] = height
             ints['object'].append(o)
-            if i+1 > max_box_per_image:
-                max_box_per_image = i+1
+            if i + 1 > max_box_per_image:
+                max_box_per_image = i + 1
         train_ints.append(ints)
 
     for k in test_image_data:
@@ -287,9 +292,14 @@ def create_csv_training_instances(train_csv, test_csv, class_csv):
         ints = {'filename': k, 'object': []}
         for i, obj in enumerate(image_data):
             o = {'xmin': obj['x1'], 'xmax': obj['x2'], 'ymin': obj['y1'], 'ymax': obj['y2'], 'name': obj['class']}
+            if with_wh:
+                x = cv2.imread(k)
+                height, width, _ = x.shape
+                o['width'] = width
+                o['height'] = height
             ints['object'].append(o)
-            if i+1 > max_box_per_image:
-                max_box_per_image = i+1
+            if i + 1 > max_box_per_image:
+                max_box_per_image = i + 1
         valid_ints.append(ints)
 
     return train_ints, valid_ints, sorted(labels), max_box_per_image
@@ -856,6 +866,7 @@ def resize_image(img, min_side=800, max_side=1333):
     return img, scale
 
 
+# noinspection PyTypeChecker
 def evaluate_coco(generator, model, anchors, json_path, imsize=448, threshold=0.5):
     """ Use the pycocotools to evaluate a COCO model on a dataset.
 
@@ -934,6 +945,7 @@ def evaluate_coco(generator, model, anchors, json_path, imsize=448, threshold=0.
     return coco_eval.stats
 
 
+# noinspection PyTypeChecker
 def evaluate(model,
              generator,
              iou_threshold=0.5,
@@ -942,6 +954,127 @@ def evaluate(model,
              net_h=416,
              net_w=416,
              save_path=None):
+    """ Evaluate a given dataset using a given model.
+    code originally from https://github.com/fizyr/keras-retinanet
+
+    # Arguments
+        model           : The model to evaluate.
+        generator       : The generator that represents the dataset to evaluate.
+        iou_threshold   : The threshold used to consider when a detection is positive or negative.
+        obj_thresh      : The threshold used to distinguish between object and non-object
+        nms_thresh      : The threshold used to determine whether two detections are duplicates
+        net_h           : The height of the input image to the model, higher value results in better accuracy
+        net_w           : The width of the input image to the model
+        save_path       : The path to save images with visualized detections to.
+    # Returns
+        A dict mapping class names to mAP scores.
+    """
+    # gather all detections and annotations
+    all_detections = [[None for _ in range(generator.num_classes())] for _ in range(generator.size())]
+    all_annotations = [[None for _ in range(generator.num_classes())] for _ in range(generator.size())]
+
+    for i in range(generator.size()):
+        print(i, end='\r')
+        raw_image = [generator.load_image(i)]
+
+        # make the boxes and the labels
+        pred_boxes = get_yolo_boxes(model, raw_image, net_h, net_w, generator.get_anchors(), obj_thresh, nms_thresh)[0]
+
+        score = np.array([box.get_score() for box in pred_boxes])
+        pred_labels = np.array([box.label for box in pred_boxes])
+
+        if len(pred_boxes) > 0:
+            pred_boxes = np.array([[box.xmin, box.ymin, box.xmax, box.ymax, box.get_score()] for box in pred_boxes])
+        else:
+            pred_boxes = np.array([[]])
+
+            # sort the boxes and the labels according to scores
+        score_sort = np.argsort(-score)
+        pred_labels = pred_labels[score_sort]
+        pred_boxes = pred_boxes[score_sort]
+
+        # copy detections to all_detections
+        for label in range(generator.num_classes()):
+            all_detections[i][label] = pred_boxes[pred_labels == label, :]
+
+        annotations = generator.load_annotation(i)
+
+        # copy detections to all_annotations
+        for label in range(generator.num_classes()):
+            try:
+                all_annotations[i][label] = annotations[annotations[:, 4] == label, :4].copy()
+            except IndexError:
+                pass
+    # compute mAP by comparing all detections and all annotations
+    average_precisions = {}
+    for label in range(generator.num_classes()):
+        print()
+        false_positives = np.zeros((0,))
+        true_positives = np.zeros((0,))
+        scores = np.zeros((0,))
+        num_annotations = 0.0
+
+        for i in range(generator.size()):
+            print(i, end='\r')
+            detections = all_detections[i][label]
+            annotations = all_annotations[i][label]
+            num_annotations += annotations.shape[0]
+            detected_annotations = []
+
+            for d in detections:
+                scores = np.append(scores, d[4])
+
+                if annotations.shape[0] == 0:
+                    false_positives = np.append(false_positives, 1)
+                    true_positives = np.append(true_positives, 0)
+                    continue
+
+                overlaps = compute_overlap(np.expand_dims(d, axis=0), annotations)
+                assigned_annotation = np.argmax(overlaps, axis=1)
+                max_overlap = overlaps[0, assigned_annotation]
+
+                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
+                    false_positives = np.append(false_positives, 0)
+                    true_positives = np.append(true_positives, 1)
+                    detected_annotations.append(assigned_annotation)
+                else:
+                    false_positives = np.append(false_positives, 1)
+                    true_positives = np.append(true_positives, 0)
+
+        # no annotations -> AP for this class is 0 (is this correct?)
+        if num_annotations == 0:
+            average_precisions[label] = 0
+            continue
+
+        # sort by score
+        indices = np.argsort(-scores)
+        false_positives = false_positives[indices]
+        true_positives = true_positives[indices]
+
+        # compute false positives and true positives
+        false_positives = np.cumsum(false_positives)
+        true_positives = np.cumsum(true_positives)
+
+        # compute recall and precision
+        recall = true_positives / num_annotations
+        precision = true_positives / np.maximum(true_positives + false_positives, np.finfo(np.float64).eps)
+
+        # compute average precision
+        average_precision = compute_ap(recall, precision)
+        average_precisions[label] = average_precision
+
+    return average_precisions
+
+
+# noinspection PyTypeChecker
+def evaluate_acc(model,
+                 generator,
+                 iou_threshold=0.5,
+                 obj_thresh=0.5,
+                 nms_thresh=0.45,
+                 net_h=416,
+                 net_w=416,
+                 save_path=None):
     """ Evaluate a given dataset using a given model.
     code originally from https://github.com/fizyr/keras-retinanet
 
@@ -1184,149 +1317,3 @@ def do_nms(boxes, nms_thresh):
 
                 if bbox_iou(boxes[index_i], boxes[index_j]) >= nms_thresh:
                     boxes[index_j].classes[c] = 0
-#
-#
-# class AdamW(Optimizer):
-#     """Adam optimizer.
-#     Default parameters follow those provided in the original paper.
-#     # Arguments
-#         lr: float >= 0. Learning rate.
-#         beta_1: float, 0 < beta < 1. Generally close to 1.
-#         beta_2: float, 0 < beta < 1. Generally close to 1.
-#         epsilon: float >= 0. Fuzz factor.
-#         decay: float >= 0. Learning rate decay over each update.
-#         weight_decay: float >= 0. Decoupled weight decay over each update.
-#     # References
-#         - [Adam - A Method for Stochastic Optimization](http://arxiv.org/abs/1412.6980v8)
-#         - [Optimization for Deep Learning Highlights in 2017](http://ruder.io/deep-learning-optimization-2017/index.html)
-#         - [Fixing Weight Decay Regularization in Adam](https://arxiv.org/abs/1711.05101)
-#     """
-#
-#     def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999, weight_decay=1e-4,  # decoupled weight decay (1/6)
-#                  epsilon=1e-8, decay=0., **kwargs):
-#         super(AdamW, self).__init__(**kwargs)
-#         with K.name_scope(self.__class__.__name__):
-#             self.iterations = K.variable(0, dtype='int64', name='iterations')
-#             self.lr = K.variable(lr, name='lr')
-#             self.init_lr = lr  # decoupled weight decay (2/6)
-#             self.beta_1 = K.variable(beta_1, name='beta_1')
-#             self.beta_2 = K.variable(beta_2, name='beta_2')
-#             self.decay = K.variable(decay, name='decay')
-#             self.wd = K.variable(weight_decay, name='weight_decay')  # decoupled weight decay (3/6)
-#         self.epsilon = epsilon
-#         self.initial_decay = decay
-#
-#     @interfaces.legacy_get_updates_support
-#     def get_updates(self, loss, params):
-#         grads = self.get_gradients(loss, params)
-#         self.updates = [K.update_add(self.iterations, 1)]
-#         wd = self.wd  # decoupled weight decay (4/6)
-#
-#         lr = self.lr
-#         if self.initial_decay > 0:
-#             lr *= (1. / (1. + self.decay * K.cast(self.iterations,
-#                                                   K.dtype(self.decay))))
-#         eta_t = lr / self.init_lr  # decoupled weight decay (5/6)
-#
-#         t = K.cast(self.iterations, K.floatx()) + 1
-#         lr_t = lr * (K.sqrt(1. - K.pow(self.beta_2, t)) /
-#                      (1. - K.pow(self.beta_1, t)))
-#
-#         ms = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
-#         vs = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
-#         self.weights = [self.iterations] + ms + vs
-#
-#         for p, g, m, v in zip(params, grads, ms, vs):
-#             m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
-#             v_t = (self.beta_2 * v) + (1. - self.beta_2) * K.square(g)
-#             p_t = p - lr_t * m_t / (K.sqrt(v_t) + self.epsilon) - eta_t * wd * p  # decoupled weight decay (6/6)
-#
-#             self.updates.append(K.update(m, m_t))
-#             self.updates.append(K.update(v, v_t))
-#             new_p = p_t
-#
-#             # Apply constraints.
-#             if getattr(p, 'constraint', None) is not None:
-#                 new_p = p.constraint(new_p)
-#
-#             self.updates.append(K.update(p, new_p))
-#         return self.updates
-#
-#     def get_config(self):
-#         config = {'lr': float(K.get_value(self.lr)),
-#                   'beta_1': float(K.get_value(self.beta_1)),
-#                   'beta_2': float(K.get_value(self.beta_2)),
-#                   'decay': float(K.get_value(self.decay)),
-#                   'weight_decay': float(K.get_value(self.wd)),
-#                   'epsilon': self.epsilon}
-#         base_config = super(AdamW, self).get_config()
-#         return dict(list(base_config.items()) + list(config.items()))
-#
-#
-# class SGDW(Optimizer):
-#     """Stochastic gradient descent optimizer.
-#     Includes support for momentum,
-#     learning rate decay, and Nesterov momentum.
-#     # Arguments
-#         lr: float >= 0. Learning rate.
-#         momentum: float >= 0. Parameter updates momentum.
-#         decay: float >= 0. Learning rate decay over each update.
-#         nesterov: boolean. Whether to apply Nesterov momentum.
-#         weight_decay: float >= 0. Decoupled weight decay over each update.
-#     # References
-#         - [Optimization for Deep Learning Highlights in 2017](http://ruder.io/deep-learning-optimization-2017/index.html)
-#         - [Fixing Weight Decay Regularization in Adam](https://arxiv.org/abs/1711.05101)
-#     """
-#
-#     def __init__(self, lr=0.01, momentum=0., decay=0., weight_decay=1e-4,  # decoupled weight decay (1/6)
-#                  nesterov=False, **kwargs):
-#         super(SGDW, self).__init__(**kwargs)
-#         with K.name_scope(self.__class__.__name__):
-#             self.iterations = K.variable(0, dtype='int64', name='iterations')
-#             self.lr = K.variable(lr, name='lr')
-#             self.init_lr = lr  # decoupled weight decay (2/6)
-#             self.momentum = K.variable(momentum, name='momentum')
-#             self.decay = K.variable(decay, name='decay')
-#             self.wd = K.variable(weight_decay, name='weight_decay')  # decoupled weight decay (3/6)
-#         self.initial_decay = decay
-#         self.nesterov = nesterov
-#
-#     @interfaces.legacy_get_updates_support
-#     def get_updates(self, loss, params):
-#         grads = self.get_gradients(loss, params)
-#         self.updates = [K.update_add(self.iterations, 1)]
-#         wd = self.wd  # decoupled weight decay (4/6)
-#
-#         lr = self.lr
-#         if self.initial_decay > 0:
-#             lr *= (1. / (1. + self.decay * K.cast(self.iterations,
-#                                                   K.dtype(self.decay))))
-#         eta_t = lr / self.init_lr  # decoupled weight decay (5/6)
-#
-#         # momentum
-#         shapes = [K.int_shape(p) for p in params]
-#         moments = [K.zeros(shape) for shape in shapes]
-#         self.weights = [self.iterations] + moments
-#         for p, g, m in zip(params, grads, moments):
-#             v = self.momentum * m - lr * g  # velocity
-#             self.updates.append(K.update(m, v))
-#
-#             if self.nesterov:
-#                 new_p = p + self.momentum * v - lr * g - eta_t * wd * p  # decoupled weight decay (6/6)
-#             else:
-#                 new_p = p + v - lr * wd * p  # decoupled weight decay
-#
-#             # Apply constraints.
-#             if getattr(p, 'constraint', None) is not None:
-#                 new_p = p.constraint(new_p)
-#
-#             self.updates.append(K.update(p, new_p))
-#         return self.updates
-#
-#     def get_config(self):
-#         config = {'lr': float(K.get_value(self.lr)),
-#                   'momentum': float(K.get_value(self.momentum)),
-#                   'decay': float(K.get_value(self.decay)),
-#                   'nesterov': self.nesterov}
-#         base_config = super(SGDW, self).get_config()
-#         return dict(list(base_config.items()) + list(config.items()))

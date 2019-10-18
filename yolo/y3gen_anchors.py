@@ -1,6 +1,12 @@
 import random
 import argparse
 import numpy as np
+import sys
+import os
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+    __package__ = "yolo"
 
 from .utils import *
 import json
@@ -96,17 +102,19 @@ def _main_(argv):
     with open(config_path) as config_buffer:
         config = json.loads(config_buffer.read())
 
-    train_imgs, train_labels, _, _ = create_coco_training_instances(
-        config['train']['train_json'],
-        config['valid']['valid_json'],
-        config['train']['train_image_dir'],
-        config['valid']['valid_image_dir'],
+    train_imgs, train_labels, _, _ = create_csv_training_instances(
+        config['train']['train_csv'],
+        config['valid']['valid_csv'],
+        config['train']['classes_csv'],
+        with_wh=True
     )
 
     # run k_mean to find the anchors
     annotation_dims = []
     for image in train_imgs:
         print(image['filename'])
+        x = cv2.imread(image['filename'])
+        height, width, _ = x.shape
         for obj in image['object']:
             relative_w = (float(obj['xmax']) - float(obj['xmin'])) / image['width']
             relatice_h = (float(obj["ymax"]) - float(obj['ymin'])) / image['height']
@@ -126,7 +134,7 @@ if __name__ == '__main__':
     argparser.add_argument(
         '-c',
         '--conf',
-        default='config/algeaconfig.json',
+        default='./algeaconfig.json',
         help='path to configuration file')
     argparser.add_argument(
         '-a',

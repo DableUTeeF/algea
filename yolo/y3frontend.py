@@ -1,11 +1,10 @@
 import tensorflow as tf
-from keras import layers, models, backend as K
+from keras import layers, models
 from keras.applications.mobilenet_v2 import MobileNetV2
 from keras.applications.mobilenet import MobileNet
 from keras.applications.resnet50 import ResNet50
-from .efficientnet import EfficientNetB0, MBConvBlock
+from efficientnet import EfficientNetB3, EfficientNetB0, MBConvBlock
 from keras.layers import Layer
-import numpy as np
 
 
 class YoloLayer(Layer):
@@ -348,6 +347,9 @@ def d53(input_image):
 def get_fe(fe, input_image):
     if fe == 'effnetb0':
         return EfficientNetB0(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
+                                                                             'block3_i_MB_swish_1']
+    elif fe == 'effnetb3':
+        return EfficientNetB3(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
                                                                              'block3_i_MB_swish_1']
     elif fe == 'd53':
         return d53(input_image)
