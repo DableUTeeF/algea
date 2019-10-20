@@ -13,7 +13,7 @@ EfficientNetConvInitializer = efficientnet.EfficientNetConvInitializer
 
 
 def get_weight_path():
-    return '/home/palm/.keras/models/efficientnet-b7_randaug.h5'
+    return '/home/palm/.keras/models/efficientnet-b5_notop.h5'
 
 
 def get_img_output_length(width, height):
@@ -160,7 +160,7 @@ def nn_base(input_tensor=None, trainable=False):
         else:
             img_input = input_tensor
 
-    model = efficientnet.EfficientNetB7(input_tensor=img_input, include_top=False, pooling=None)
+    model = efficientnet.EfficientNetB5(input_tensor=img_input, include_top=False, pooling=None)
     return model.get_layer('block5_i_MB_swish_1').output
 
 
@@ -172,8 +172,8 @@ def classifier_layers(x):
     round_filters = efficientnet.round_filters
     round_repeats = efficientnet.round_repeats
 
-    width_coefficient = 2.0
-    depth_coefficient = 3.1
+    width_coefficient = 1.6
+    depth_coefficient = 2.2
     drop_connect_rate_per_block = 0.0
     depth_divisor = 8
     min_depth = None

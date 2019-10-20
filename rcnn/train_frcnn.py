@@ -1,7 +1,7 @@
 from __future__ import division
 import random
 import pprint
-import sys
+import cv2
 import time
 import numpy as np
 from optparse import OptionParser
@@ -16,7 +16,7 @@ if __name__ == "__main__" and __package__ is None:
 
 import tensorflow as tf
 from keras import backend as K
-from keras.optimizers import Adam, SGD, RMSprop
+from keras.optimizers import Adam
 from keras.layers import Input
 from keras.models import Model
 from . import config, data_generators
@@ -24,6 +24,7 @@ from . import losses as losses
 from . import roi_helpers as roi_helpers
 from keras.utils import generic_utils
 from keras.callbacks import TensorBoard
+from tensorflow.python.framework.errors_impl import InvalidArgumentError
 
 
 # tensorboard 로그 작성 함수
@@ -35,6 +36,7 @@ def write_log(callback, names, logs, batch_no):
         summary_value.tag = name
         callback.writer.add_summary(summary, batch_no)
         callback.writer.flush()
+
 
 sys.setrecursionlimit(40000)
 
@@ -130,18 +132,12 @@ random.shuffle(all_imgs)
 
 num_imgs = len(all_imgs)
 
-train_imgs = [s for s in all_imgs if s['imageset'] == 'train']
-val_imgs = [s for s in all_imgs if s['imageset'] == 'val']
-test_imgs = [s for s in all_imgs if s['imageset'] == 'test']
+train_imgs = all_imgs
 
 print('Num train samples {}'.format(len(train_imgs)))
-print('Num val samples {}'.format(len(val_imgs)))
-print('Num test samples {}'.format(len(test_imgs)))
 
 # groundtruth anchor 데이터 가져오기
 data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='train')
-data_gen_val = data_generators.get_anchor_gt(val_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='val')
-data_gen_test = data_generators.get_anchor_gt(test_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='val')
 
 if K.image_dim_ordering() == 'th':
     input_shape_img = (3, None, None)
@@ -211,7 +207,7 @@ class_mapping_inv = {v: k for k, v in class_mapping.items()}
 print('Starting training')
 
 # vis = True
-
+errored = 0
 for epoch_num in range(num_epochs):
 
     progbar = generic_utils.Progbar(epoch_length)   # keras progress bar 사용
@@ -262,16 +258,29 @@ for epoch_num in range(num_epochs):
         rpn_accuracy_for_epoch.append((len(pos_samples)))
 
         if C.num_rois > 1:
-            if len(pos_samples) < C.num_rois//2:
+            if len(pos_samples) < C.num_rois // 2:
                 selected_pos_samples = pos_samples.tolist()
             else:
-                selected_pos_samples = np.random.choice(pos_samples, C.num_rois//2, replace=False).tolist()
+                if len(pos_samples) > 0:
+                    selected_pos_samples = np.random.choice(pos_samples, C.num_rois // 2, replace=False).tolist()
+                else:
+                    selected_pos_samples = []
             try:
-                selected_neg_samples = np.random.choice(neg_samples, C.num_rois - len(selected_pos_samples), replace=False).tolist()
+                if len(neg_samples) > 0:
+                    selected_neg_samples = np.random.choice(neg_samples, C.num_rois - len(selected_pos_samples),
+                                                            replace=False).tolist()
+                else:
+                    selected_neg_samples = []
             except:
-                selected_neg_samples = np.random.choice(neg_samples, C.num_rois - len(selected_pos_samples), replace=True).tolist()
+                if len(neg_samples) > 0:
+                    selected_neg_samples = np.random.choice(neg_samples, C.num_rois - len(selected_pos_samples),
+                                                            replace=True).tolist()
+                else:
+                    selected_neg_samples = []
 
             sel_samples = selected_pos_samples + selected_neg_samples
+            if len(sel_samples) == 0:
+                continue
         else:
             # in the extreme case where num_rois = 1, we pick a random pos or neg sample
             selected_pos_samples = pos_samples.tolist()
@@ -281,7 +290,12 @@ for epoch_num in range(num_epochs):
             else:
                 sel_samples = random.choice(pos_samples)
 
-        loss_class = model_classifier.train_on_batch([X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
+        try:
+            loss_class = model_classifier.train_on_batch([X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
+        except InvalidArgumentError:
+            cv2.imwrite(f'/home/palm/PycharmProjects/algea/dataset/error/{errored}.jpg', X[0])
+            errored += 1
+            continue
         write_log(callback, ['detection_cls_loss', 'detection_reg_loss', 'detection_acc'], loss_class, train_step)
         train_step += 1
 
@@ -329,7 +343,7 @@ for epoch_num in range(num_epochs):
 
             if curr_loss < best_loss:
                 if C.verbose:
-                    print('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
+                    print('Total loss decreased from {} to {}, saving weights'.format(best_loss, curr_loss))
                 best_loss = curr_loss
                 model_all.save_weights(C.model_path)
 

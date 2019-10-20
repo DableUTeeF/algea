@@ -167,8 +167,8 @@ def non_max_suppression_fast(boxes, probs, overlap_thresh=0.9, max_boxes=300):
     x2 = boxes[:, 2]
     y2 = boxes[:, 3]
 
-    np.testing.assert_array_less(x1, x2)
-    np.testing.assert_array_less(y1, y2)
+    # np.testing.assert_array_less(x1, x2)
+    # np.testing.assert_array_less(y1, y2)
 
     # if the bounding boxes integers, convert them to floats --
     # this is important since we'll be doing a bunch of divisions

@@ -57,7 +57,7 @@ def create_callbacks(saved_weights_name, model_to_save, tensorboard_logs, config
     )
     now = datetime.now()
     dt = f'{now.year}-{now.month}-{now.day}_{now.hour}:{now.minute}:{now.second}'
-    logdir = tensorboard_logs + os.path.split(saved_weights_name)[-1][:-3] + '_' + dt
+    logdir = tensorboard_logs + os.path.split(saved_weights_name)[-2] + '_' + dt
 
     tensorboard = CustomTensorBoard(
         config,
