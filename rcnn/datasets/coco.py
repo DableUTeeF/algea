@@ -324,3 +324,105 @@ class coco(imdb):
         else:
             self.config['use_salt'] = True
             self.config['cleanup'] = True
+
+
+class AlgeaCoco(coco):
+    def __init__(self, image_set, data_path):
+        imdb.__init__(self, 'algeacoco_' + image_set)
+        # COCO specific config options
+        self.config = {'use_salt': True,
+                       'cleanup': True}
+        # name, paths
+        self._image_set = image_set
+        self._data_path = data_path
+        # load COCO API, classes, class <-> id mappings
+        self._COCO = COCO(self._get_ann_file())
+        cats = self._COCO.loadCats(self._COCO.getCatIds())
+        self._classes = tuple(['__background__'] + [c['name'] for c in cats])
+        self._class_to_ind = dict(list(zip(self.classes, list(range(self.num_classes)))))
+        self._class_to_coco_cat_id = dict(list(zip([c['name'] for c in cats],
+                                                   self._COCO.getCatIds())))
+        self._image_index = self._load_image_set_index()
+        # Default to roidb handler
+        self.set_proposal_method('gt')
+        self.competition_mode(False)
+
+        # Some image sets are "views" (i.e. subsets) into others.
+        # For example, minival2014 is a random 5000 image subset of val2014.
+        # This mapping tells us where the view's images and proposals come from.
+        self._view_map = {
+            'train_algea': 'train',
+            'val_algea': 'val',
+        }
+        # Dataset splits that have ground-truth annotations (test splits
+        # do not have gt annotations)
+        self._gt_splits = ('train', 'val', 'minival')
+
+    def _get_ann_file(self):
+        return osp.join(self._data_path, 'annotations', self._image_set + '_algea.json')
+
+    def image_path_from_index(self, index):
+        """
+        Construct an image path from the image's "index" identifier.
+        """
+        # Example image path for index=119993:
+        #   images/train2014/COCO_train2014_000000119993.jpg
+        return os.path.join(self._data_path, 'images', index + '.jpg')
+
+    def _load_coco_annotation(self, index):
+        """
+        Loads COCO bounding-box instance annotations. Crowd instances are
+        handled by marking their overlaps (with all categories) to -1. This
+        overlap value means that crowd "instances" are excluded from training.
+        """
+        im_ann = self._COCO.imgs[index]
+        width = im_ann['width']
+        height = im_ann['height']
+
+        annIds = self._COCO.getAnnIds(imgIds=index, iscrowd=None)
+        objs = self._COCO.loadAnns(annIds)
+        # Sanitize bboxes -- some are invalid
+        valid_objs = []
+        for obj in objs:
+            x1 = np.max((0, obj['bbox'][0]))
+            y1 = np.max((0, obj['bbox'][1]))
+            x2 = np.min((width - 1, x1 + np.max((0, obj['bbox'][2] - 1))))
+            y2 = np.min((height - 1, y1 + np.max((0, obj['bbox'][3] - 1))))
+            if obj['area'] > 0 and x2 >= x1 and y2 >= y1:
+                obj['clean_bbox'] = [x1, y1, x2, y2]
+                valid_objs.append(obj)
+        objs = valid_objs
+        num_objs = len(objs)
+
+        boxes = np.zeros((num_objs, 4), dtype=np.uint16)
+        gt_classes = np.zeros((num_objs), dtype=np.int32)
+        overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
+        seg_areas = np.zeros((num_objs), dtype=np.float32)
+
+        # Lookup table to map from COCO category ids to our internal class
+        # indices
+        coco_cat_id_to_class_ind = dict([(self._class_to_coco_cat_id[cls],
+                                          self._class_to_ind[cls])
+                                         for cls in self._classes[1:]])
+
+        for ix, obj in enumerate(objs):
+            cls = coco_cat_id_to_class_ind[obj['category_id']]
+            boxes[ix, :] = obj['clean_bbox']
+            gt_classes[ix] = cls
+            seg_areas[ix] = obj['area']
+            if obj['iscrowd']:
+                # Set overlap to -1 for all classes for crowd objects
+                # so they will be excluded during training
+                overlaps[ix, :] = -1.0
+            else:
+                overlaps[ix, cls] = 1.0
+
+        ds_utils.validate_boxes(boxes, width=width, height=height)
+        overlaps = scipy.sparse.csr_matrix(overlaps)
+        return {'width': width,
+                'height': height,
+                'boxes': boxes,
+                'gt_classes': gt_classes,
+                'gt_overlaps': overlaps,
+                'flipped': False,
+                'seg_areas': seg_areas}

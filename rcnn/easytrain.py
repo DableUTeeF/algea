@@ -18,7 +18,7 @@ if __name__ == "__main__" and __package__ is None:
 import numpy as np
 import pprint
 import time
-import pickle
+from keras.utils import generic_utils
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -30,7 +30,8 @@ from .model.utils.config import cfg
 from .model.utils.net_utils import adjust_learning_rate, save_checkpoint
 
 from .model.faster_rcnn.effnets import effnet
-from .datasets.csv import csvdb
+from .model.faster_rcnn.resnet import resnet
+from .datasets.coco import AlgeaCoco
 from easydict import EasyDict as edict
 
 
@@ -87,14 +88,14 @@ def get_roidb(imdb):
 if __name__ == '__main__':
     args = edict()
     args.batch_size = 1
-    args.num_workers = 4
+    args.num_workers = 0
     args.class_agnostic = False
-    args.lr = 1e-3
+    args.lr = 1e-4
     args.optimizer = 'adam'
     args.cuda = True
     args.resume = False
     args.mGPUs = False
-    args.start_epoch = 1
+    args.start_epoch = 12
     args.max_epochs = 20
     args.lr_decay_step = 5
     args.lr_decay_gamma = 0.1
@@ -108,8 +109,9 @@ if __name__ == '__main__':
     cfg.TRAIN.USE_FLIPPED = True
     cfg.USE_GPU_NMS = True
 
-    imdb = csvdb('/home/palm/PycharmProjects/algea/dataset/train_annotations',
-                 '/home/palm/PycharmProjects/algea/dataset/classes')
+    # imdb = csvdb('/home/palm/PycharmProjects/algea/dataset/train_annotations',
+    #              '/home/palm/PycharmProjects/algea/dataset/classes')
+    imdb = AlgeaCoco('train', '/media/palm/data/MicroAlgae/16_8_62')
     roidb = get_roidb(imdb)
     ratio_list, ratio_index = rank_roidb_ratio(roidb)
 
@@ -136,10 +138,11 @@ if __name__ == '__main__':
     gt_boxes = torch.FloatTensor(1)
 
     # ship to cuda
-    im_data = im_data.cuda()
-    im_info = im_info.cuda()
-    num_boxes = num_boxes.cuda()
-    gt_boxes = gt_boxes.cuda()
+    if args.cuda:
+        im_data = im_data.cuda()
+        im_info = im_info.cuda()
+        num_boxes = num_boxes.cuda()
+        gt_boxes = gt_boxes.cuda()
 
     # make variable
     im_data = Variable(im_data)
@@ -147,10 +150,10 @@ if __name__ == '__main__':
     num_boxes = Variable(num_boxes)
     gt_boxes = Variable(gt_boxes)
 
-    cfg.CUDA = False
+    cfg.CUDA = True
 
     # initilize the network here.
-    fasterRCNN = effnet(imdb.classes, 2, pretrained=True, class_agnostic=args.class_agnostic)
+    fasterRCNN = resnet(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
 
     fasterRCNN.create_architecture()
 
@@ -201,6 +204,8 @@ if __name__ == '__main__':
     logger = SummaryWriter("logs")
 
     for epoch in range(args.start_epoch, args.max_epochs + 1):
+        progbar = generic_utils.Progbar(iters_per_epoch)  # keras progress bar 사용
+        print('Epoch {}/{}'.format(epoch, args.max_epochs))
         # setting to train mode
         fasterRCNN.train()
         loss_temp = 0
@@ -219,10 +224,7 @@ if __name__ == '__main__':
             num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
             fasterRCNN.zero_grad()
-            try:
-                rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_box, RCNN_loss_cls, RCNN_loss_bbox, rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-            except ValueError:
-                continue
+            rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_box, RCNN_loss_cls, RCNN_loss_bbox, rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
             loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
             loss_temp += loss.item()
 
@@ -230,44 +232,51 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            loss_rpn_cls = rpn_loss_cls.item()
+            loss_rpn_box = rpn_loss_box.item()
+            loss_rcnn_cls = RCNN_loss_cls.item()
+            loss_rcnn_box = RCNN_loss_bbox.item()
 
-            if step % args.disp_interval == 0:
-                end = time.time()
-                if step > 0:
-                    loss_temp /= (args.disp_interval + 1)
-
-                if args.mGPUs:
-                    loss_rpn_cls = rpn_loss_cls.mean().item()
-                    loss_rpn_box = rpn_loss_box.mean().item()
-                    loss_rcnn_cls = RCNN_loss_cls.mean().item()
-                    loss_rcnn_box = RCNN_loss_bbox.mean().item()
-                    fg_cnt = torch.sum(rois_label.data.ne(0))
-                    bg_cnt = rois_label.data.numel() - fg_cnt
-                else:
-                    loss_rpn_cls = rpn_loss_cls.item()
-                    loss_rpn_box = rpn_loss_box.item()
-                    loss_rcnn_cls = RCNN_loss_cls.item()
-                    loss_rcnn_box = RCNN_loss_bbox.item()
-                    fg_cnt = torch.sum(rois_label.data.ne(0))
-                    bg_cnt = rois_label.data.numel() - fg_cnt
-
-                print("[session %d][epoch %2d][iter %4d/%4d] loss: %.4f, lr: %.2e" \
-                      % (args.session, epoch, step, iters_per_epoch, loss_temp, lr))
-                print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end - start))
-                print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f" \
-                      % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
-                info = {
-                    'loss': loss_temp,
-                    'loss_rpn_cls': loss_rpn_cls,
-                    'loss_rpn_box': loss_rpn_box,
-                    'loss_rcnn_cls': loss_rcnn_cls,
-                    'loss_rcnn_box': loss_rcnn_box
-                }
-                logger.add_scalars("logs_s_{}/losses".format(args.session), info,
-                                   (epoch - 1) * iters_per_epoch + step)
-
-                loss_temp = 0
-                start = time.time()
+            progbar.update(step+1, [('loss', loss.item()),
+                                  ('rpn_cls', loss_rpn_cls), ('rpn_box', loss_rpn_box),
+                                  ('rcnn_cls', loss_rcnn_cls), ('rcnn_box', loss_rcnn_box)])
+            # if step % args.disp_interval == 0:
+            #     end = time.time()
+            #     if step > 0:
+            #         loss_temp /= (args.disp_interval + 1)
+            #
+            #     if args.mGPUs:
+            #         loss_rpn_cls = rpn_loss_cls.mean().item()
+            #         loss_rpn_box = rpn_loss_box.mean().item()
+            #         loss_rcnn_cls = RCNN_loss_cls.mean().item()
+            #         loss_rcnn_box = RCNN_loss_bbox.mean().item()
+            #         fg_cnt = torch.sum(rois_label.data.ne(0))
+            #         bg_cnt = rois_label.data.numel() - fg_cnt
+            #     else:
+            #         loss_rpn_cls = rpn_loss_cls.item()
+            #         loss_rpn_box = rpn_loss_box.item()
+            #         loss_rcnn_cls = RCNN_loss_cls.item()
+            #         loss_rcnn_box = RCNN_loss_bbox.item()
+            #         fg_cnt = torch.sum(rois_label.data.ne(0))
+            #         bg_cnt = rois_label.data.numel() - fg_cnt
+            #
+            #     print("[session %d][epoch %2d][iter %4d/%4d] loss: %.4f, lr: %.2e" \
+            #           % (args.session, epoch, step, iters_per_epoch, loss_temp, lr))
+            #     print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end - start))
+            #     print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f" \
+            #           % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
+            #     info = {
+            #         'loss': loss_temp,
+            #         'loss_rpn_cls': loss_rpn_cls,
+            #         'loss_rpn_box': loss_rpn_box,
+            #         'loss_rcnn_cls': loss_rcnn_cls,
+            #         'loss_rcnn_box': loss_rcnn_box
+            #     }
+            #     logger.add_scalars("logs_s_{}/losses".format(args.session), info,
+            #                        (epoch - 1) * iters_per_epoch + step)
+            #
+            #     loss_temp = 0
+            #     start = time.time()
 
         save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
         save_checkpoint({

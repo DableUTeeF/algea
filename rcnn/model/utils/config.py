@@ -60,14 +60,14 @@ __C.TRAIN.SUMMARY_INTERVAL = 180
 
 # Scale to use during training (can list multiple scales)
 # The scale is the pixel size of an image's shortest side
-__C.TRAIN.SCALES = (600,)
+__C.TRAIN.SCALES = (800, 962)
 
 # Max pixel size of the longest side of a scaled input image
-__C.TRAIN.MAX_SIZE = 1000
+__C.TRAIN.MAX_SIZE = 1312
 
 # Trim size for input images to create minibatch
-__C.TRAIN.TRIM_HEIGHT = 600
-__C.TRAIN.TRIM_WIDTH = 600
+__C.TRAIN.TRIM_HEIGHT = 960
+__C.TRAIN.TRIM_WIDTH = 960
 
 # Images to use per minibatch
 __C.TRAIN.IMS_PER_BATCH = 1

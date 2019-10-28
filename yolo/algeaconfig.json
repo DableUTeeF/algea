@@ -1,15 +1,15 @@
 {
   "model": {
     "backend": "B0DW",
-    "min_input_size": 320, "comment1": "256 might be better",
-    "max_input_size": 608,
+    "min_input_size": 608, "comment1": "256 might be better",
+    "max_input_size": 962,
     "anchors": [9,20, 11,19, 13,14, 14,17, 15,12, 16,26, 22,19, 23,40, 30,30],
     "labels": []
   },
   "train": {
     "train_csv": "/home/palm/PycharmProjects/algea/dataset/train_annotations",
     "classes_csv": "/home/palm/PycharmProjects/algea/dataset/classes",
-    "train_times": 5,
+    "train_times": 1,
     "batch_size": 2,
     "opt": "sgd",
     "learning_rate": 1e-2,
@@ -23,7 +23,7 @@
     "xywh_scale": 1,
     "class_scale": 5,
     "tensorboard_dir": "logs/",
-    "saved_weights_name": "snapshots/B3DW_algea_1/{epoch:02d}_{val_loss}_{loss}.h5",
+    "saved_weights_name": "snapshots/B3DW_algea_2/{epoch:02d}_{val_loss:.4f}_{loss:.4f}.h5",
     "debug": false
   },
   "valid": {

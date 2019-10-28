@@ -10,7 +10,7 @@ import torch
 
 from rcnn.model.utils.config import cfg
 from rcnn.roi_data_layer.minibatch import get_minibatch
-
+from retinanet.utils.image import resize_image
 import numpy as np
 
 
@@ -50,6 +50,7 @@ class roibatchLoader(data.Dataset):
                 target_ratio.astype(np.float64))  # trainset ratio list ,each batch is same number
 
     def __getitem__(self, index):
+        # todo: change this damn function to have the resize
         if self.training:
             index_ratio = int(self.ratio_index[index])
         else:
@@ -157,7 +158,7 @@ class roibatchLoader(data.Dataset):
                 # this means that data_width < data_height
                 trim_size = int(np.floor(data_width / ratio))
 
-                padding_data = torch.FloatTensor(int(np.ceil(data_width / ratio)), \
+                padding_data = torch.FloatTensor(int(np.ceil(data_width / ratio)),
                                                  data_width, 3).zero_()
 
                 padding_data[:data_height, :, :] = data[0]

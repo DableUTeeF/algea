@@ -85,7 +85,7 @@ class csvdb(imdb):
             gt_classes = []
             seg_areas = []
             for i, obj in enumerate(image_data):
-                box = np.array([obj['x1'] - 1, obj['x2'] - 1, obj['y1'] - 1, obj['y2'] - 1], dtype='uint16')
+                box = np.array([obj['x1'], obj['x2'], obj['y1'], obj['y2']], dtype='uint16')
                 gt_class = labels.index(obj['class'])+1
                 seg_area = (obj['x2'] - obj['x1'] + 1) * (obj['y2'] - obj['y1'] + 1)
                 boxes.append(box)

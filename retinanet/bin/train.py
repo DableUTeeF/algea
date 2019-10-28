@@ -20,7 +20,7 @@ import argparse
 import os
 import sys
 import warnings
-
+import numpy as np
 import keras
 import keras.preprocessing.image
 import tensorflow as tf
@@ -516,6 +516,7 @@ def main(args=None):
         use_multiprocessing = False
 
     # start training
+    print(f'\033[{np.random.randint(31, 37)}m')
     training_model.fit_generator(
         generator=train_generator,
         steps_per_epoch=args.steps,
@@ -524,7 +525,8 @@ def main(args=None):
         callbacks=callbacks,
         workers=args.workers,
         use_multiprocessing=use_multiprocessing,
-        max_queue_size=args.max_queue_size
+        max_queue_size=args.max_queue_size,
+        initial_epoch=len(os.listdir(args.snapshot_path))
     )
 
 

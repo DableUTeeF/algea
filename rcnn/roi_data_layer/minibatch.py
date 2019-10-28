@@ -13,8 +13,8 @@ from __future__ import print_function
 import numpy as np
 import numpy.random as npr
 from scipy.misc import imread
-from model.utils.config import cfg
-from model.utils.blob import prep_im_for_blob, im_list_to_blob
+from rcnn.model.utils.config import cfg
+from rcnn.model.utils.blob import prep_im_for_blob, im_list_to_blob
 import pdb
 
 

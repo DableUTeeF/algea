@@ -3,7 +3,7 @@ from keras import layers, models
 from keras.applications.mobilenet_v2 import MobileNetV2
 from keras.applications.mobilenet import MobileNet
 from keras.applications.resnet50 import ResNet50
-from efficientnet import EfficientNetB3, EfficientNetB0, MBConvBlock
+from efficientnet import EfficientNetB3, EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB4, EfficientNetB5, MBConvBlock
 from keras.layers import Layer
 
 
@@ -348,8 +348,20 @@ def get_fe(fe, input_image):
     if fe == 'effnetb0':
         return EfficientNetB0(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
                                                                              'block3_i_MB_swish_1']
+    elif fe == 'effnetb1':
+        return EfficientNetB1(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
+                                                                             'block3_i_MB_swish_1']
+    elif fe == 'effnetb2':
+        return EfficientNetB2(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
+                                                                             'block3_i_MB_swish_1']
     elif fe == 'effnetb3':
         return EfficientNetB3(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
+                                                                             'block3_i_MB_swish_1']
+    elif fe == 'effnetb4':
+        return EfficientNetB4(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
+                                                                             'block3_i_MB_swish_1']
+    elif fe == 'effnetb5':
+        return EfficientNetB5(input_tensor=input_image, include_top=False), ['swish_last', 'block5_i_MB_swish_1',
                                                                              'block3_i_MB_swish_1']
     elif fe == 'd53':
         return d53(input_image)
@@ -490,13 +502,14 @@ def yolo3(fe,
     if not anchors:
         infer_only = True
     input_image = layers.Input(shape=(None, None, 3))
-    true_boxes = layers.Input(shape=(1, 1, 1, max_box_per_image, 4))
-    true_yolo_1 = layers.Input(
-        shape=(None, None, len(anchors) // 6, 4 + 1 + nb_class))
-    true_yolo_2 = layers.Input(
-        shape=(None, None, len(anchors) // 6, 4 + 1 + nb_class))
-    true_yolo_3 = layers.Input(
-        shape=(None, None, len(anchors) // 6, 4 + 1 + nb_class))
+    if not infer_only:
+        true_boxes = layers.Input(shape=(1, 1, 1, max_box_per_image, 4))
+        true_yolo_1 = layers.Input(
+            shape=(None, None, len(anchors) // 6, 4 + 1 + nb_class))
+        true_yolo_2 = layers.Input(
+            shape=(None, None, len(anchors) // 6, 4 + 1 + nb_class))
+        true_yolo_3 = layers.Input(
+            shape=(None, None, len(anchors) // 6, 4 + 1 + nb_class))
 
     fe, ls = get_fe(fe, input_image)
     x = fe.get_layer(ls[0]).output

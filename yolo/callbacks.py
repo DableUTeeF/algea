@@ -1,10 +1,38 @@
 import tensorflow as tf
 import warnings
 import numpy as np
-from keras.callbacks import TensorBoard, ModelCheckpoint
-# TensorBoard = tf.keras.callbacks.TensorBoard
-# ModelCheckpoint = tf.keras.callbacks.ModelCheckpoint
+from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
+import os
+import re
+import subprocess
 from keras import backend as K
+
+
+class GPUUtilizeMon(Callback):
+    def __init__(self):
+        super().__init__()
+        self.history = {}
+        self.epoch = 0
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.epoch = epoch
+        self.history[self.epoch] = {'temperature': [], 'fan_percent': [], 'gpu_percent': [], 'ram_percent': []}
+
+    def on_batch_end(self, batch, logs=None):
+        command = 'nvidia-smi'
+        p = subprocess.check_output(command)
+        c = re.findall(r'\b\d+C', str(p))
+        temperature = int(c[0][:-1])
+        n = re.findall(r'\b\d+%', str(p))
+        fan_percent = int(n[0][:-1])
+        gpu_percent = int(n[1][:-1])
+        ram_using = re.findall(r'\b\d+MiB+ /', str(p))[0][:-5]
+        ram_total = re.findall(r'/  \b\d+MiB', str(p))[0][3:-3]
+        ram_percent = int(ram_using) / int(ram_total)
+        self.history[self.epoch]['temperature'].append(temperature)
+        self.history[self.epoch]['fan_percent'].append(fan_percent)
+        self.history[self.epoch]['gpu_percent'].append(gpu_percent)
+        self.history[self.epoch]['ram_percent'].append(ram_percent)
 
 
 class CustomTensorBoard(TensorBoard):
@@ -16,6 +44,8 @@ class CustomTensorBoard(TensorBoard):
         self.log_every = log_every
         self.counter = 0
         self.settings_str = settings_str
+        self.history = {}
+        self.epoch = 0
         if K.backend() == 'tensorflow':
             self.sess = K.get_session()
 
@@ -24,6 +54,22 @@ class CustomTensorBoard(TensorBoard):
                                                 self.sess.graph)
         else:
             self.writer = tf.summary.FileWriter(self.log_dir)
+
+    @staticmethod
+    def call_process():
+        command = 'nvidia-smi'
+        p = subprocess.check_output(command)
+        c = re.findall(r'\b\d+C', str(p))
+        temperature = int(c[0][:-1])
+        n = re.findall(r'\b\d+%', str(p))
+        fan_percent = int(n[0][:-1])
+        gpu_percent = int(n[1][:-1])
+        ram_using = re.findall(r'\b\d+MiB+ /', str(p))[0][:-5]
+        ram_total = re.findall(r'/  \b\d+MiB', str(p))[0][3:-3]
+        ram_percent = int(ram_using) / int(ram_total)
+        history = {'temperature': temperature, 'fan_percent': fan_percent, 'gpu_percent': gpu_percent,
+                   'ram_percent': ram_percent}
+        return history
 
     def on_batch_end(self, batch, logs=None):
         self.counter += 1
@@ -34,6 +80,13 @@ class CustomTensorBoard(TensorBoard):
                 summary = tf.Summary()
                 summary_value = summary.value.add()
                 summary_value.simple_value = value.item()
+                summary_value.tag = name
+                self.writer.add_summary(summary, self.counter)
+            history = self.call_process()
+            for name, value in history.items():
+                summary = tf.Summary()
+                summary_value = summary.value.add()
+                summary_value.simple_value = value
                 summary_value.tag = name
                 self.writer.add_summary(summary, self.counter)
             self.writer.flush()
@@ -50,7 +103,9 @@ class CustomTensorBoard(TensorBoard):
             s = sess.run(summary)
             self.writer.add_summary(s)
 
-    # def on_epoch_begin(self, epoch, logs=None):
+    def on_epoch_begin(self, epoch, logs=None):
+        self.epoch = epoch
+        self.history[self.epoch] = {'temperature': [], 'fan_percent': [], 'gpu_percent': [], 'ram_percent': []}
     #     print(f'\033[{np.random.randint(31, 37)}m')
 
 

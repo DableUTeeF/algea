@@ -1,7 +1,7 @@
 import cv2
 import csv
 from retinanet.preprocessing.csv_generator import _read_annotations, _open_for_csv, _read_classes
-from utils import add_bbox
+from boxutils import add_bbox
 
 if __name__ == '__main__':
 

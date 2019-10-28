@@ -37,3 +37,8 @@ more_badshoes/*
 anns/*
 *.pb
 *.pbtxt
+*.pth
+*.pk
+*.pkl
+*.pickle
+*.hdf5
