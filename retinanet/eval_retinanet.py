@@ -87,7 +87,7 @@ if __name__ == '__main__':
     image_max_side = 1600
     generator = create_generator(annotations, classes, image_min_side, image_max_side)
 
-    model_path = '/home/palm/PycharmProjects/algea/snapshots/retina/r50-1/resnet50_csv_08.h5'
+    model_path = '/home/palm/PycharmProjects/algea/snapshots/retina/r50-1/resnet50_csv_05.h5'
 
     backbone = models.backbone('resnet50')
 
