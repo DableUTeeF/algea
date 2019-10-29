@@ -90,13 +90,13 @@ if __name__ == '__main__':
     args.batch_size = 1
     args.num_workers = 0
     args.class_agnostic = False
-    args.lr = 1e-4
+    args.lr = 1e-6
     args.optimizer = 'adam'
     args.cuda = True
-    args.resume = False
+    args.resume = True
     args.mGPUs = False
-    args.start_epoch = 12
-    args.max_epochs = 20
+    args.start_epoch = 20
+    args.max_epochs = 25
     args.lr_decay_step = 5
     args.lr_decay_gamma = 0.1
     args.disp_interval = 100
@@ -181,8 +181,7 @@ if __name__ == '__main__':
         fasterRCNN.cuda()
 
     if args.resume:
-        load_name = os.path.join(output_dir,
-                                 'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+        load_name = os.path.join('/home/palm/PycharmProjects/algea/snapshots/rcnn/1/faster_rcnn_1_17_4307.pth')
         print("loading checkpoint %s" % (load_name))
         checkpoint = torch.load(load_name)
         args.session = checkpoint['session']
