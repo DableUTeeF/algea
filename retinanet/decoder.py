@@ -1,10 +1,14 @@
+import os
+import sys
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    __package__ = "retinanet"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import keras
 from retinanet.utils.image import read_image_bgr, preprocess_image, resize_image
 from retinanet.utils.visualization import draw_box, draw_caption
 from PIL import Image
 import cv2
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import numpy as np
 import time
 import tensorflow as tf
@@ -79,6 +83,12 @@ if __name__ == '__main__':
 
     labels_to_names = {0: 'mif', 1: 'ov'}
     main_model, training_model, prediction_model = create_models(backbone.retinanet, len(labels_to_names))
+    for x in training_model.layers:
+        try:
+            x.summary()
+        except AttributeError:
+            pass
+    exit()
     main_model.load_weights(model_path)
     model = prediction_model
     path = '/media/palm/data/MicroAlgae/16_8_62/images'

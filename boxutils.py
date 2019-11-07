@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
 
-color_list = np.array([1.000, 0.850, 0.325, 1.000, 0.098, 1.000, 0.929, 0.694, 0.125, 0.494, 0.184, 0.556,
-                       0.466, 0.674, 0.188, 0.301, 0.745, 0.933, 0.635, 0.078, 0.184, 0.300, 0.300, 0.300,
+color_list = np.array([0.466, 0.750, 0.325, 0.850, 0.098, 1.000, 0.929, 0.694, 0.125, 0.494, 0.184, 0.556,
+                       1.000, 0.674, 0.188, 0.301, 0.745, 0.933, 0.635, 0.078, 0.184, 0.300, 0.300, 0.300,
                        0.600, 0.600, 0.600, 1.000, 0.000, 0.000, 1.000, 0.500, 0.000, 0.749, 0.749, 0.000,
                        0.000, 1.000, 0.000, 0.000, 0.000, 1.000, 0.667, 0.000, 1.000, 0.333, 0.667, 0.000,
                        0.333, 1.000, 0.000, 0.667, 0.333, 0.000, 0.667, 0.667, 0.000, 0.667, 1.000, 0.000,
@@ -27,11 +27,11 @@ colors = [(color_list[_]).astype(np.uint8) for _ in range(len(color_list))]
 colors = np.array(colors, dtype=np.uint8).reshape(len(colors), 1, 1, 3)
 
 
-def add_bbox(img, bbox, cat, labels, conf=1, show_txt=True):
+def add_bbox(img, bbox, cat, labels, conf=1, show_txt=True, color=None):
     # bbox = np.array(bbox, dtype=np.int32)
     # cat = (int(cat) + 1) % 80
     cat = int(cat)
-    c = colors[cat][0][0].tolist()
+    c = colors[cat][0][0].tolist() if color is None else color
     txt = '{}{:.1f}'.format(labels[cat], conf)
     font = cv2.FONT_HERSHEY_SIMPLEX
     cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]

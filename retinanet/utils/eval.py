@@ -30,13 +30,13 @@ assert (callable(progressbar.progressbar)), "Using wrong progressbar module, ins
 def _compute_ap(recall, precision):
     """ Compute the average precision, given the recall and precision curves.
 
-    Code originally from https://github.com/rbgirshick/py-faster-rcnn.
+    Code originally from https://github.com/rbgirshick/py-faster-faster_rcnn.
 
     # Arguments
         recall:    The recall curve (list).
         precision: The precision curve (list).
     # Returns
-        The average precision as computed in py-faster-rcnn.
+        The average precision as computed in py-faster-faster_rcnn.
     """
     # correct AP calculation
     # first append sentinel values at the end
