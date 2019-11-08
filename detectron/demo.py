@@ -69,7 +69,7 @@ cfg.merge_from_file("/home/palm/detectron2/configs/COCO-Detection/faster_rcnn_R_
 cfg.DATASETS.TRAIN = ("algea_train",)
 cfg.DATASETS.TEST = ()  # no metrics implemented for this dataset
 cfg.DATALOADER.NUM_WORKERS = 2
-cfg.MODEL.WEIGHTS = "/home/palm/PycharmProjects/algea/detectron/output/model_0014999.pth"
+cfg.MODEL.WEIGHTS = "/home/palm/PycharmProjects/algea/detectron/output/model_0064999.pth"
 cfg.SOLVER.IMS_PER_BATCH = 3
 cfg.SOLVER.BASE_LR = 0.00025
 cfg.SOLVER.MAX_ITER = 50000  # 300 iterations seems good enough, but you can certainly train longer
@@ -109,7 +109,7 @@ for d in valid_ints:
             else:
                 color = (0, 0, 255)
 
-        im = add_bbox(im, bboxes[i].astype('uint16'), classes[i], ['ov', 'mif'], show_txt=True, color=color)
+        im = add_bbox(im, bboxes[i].astype('uint16'), classes[i], ['ov', 'mif'], scores[i], show_txt=True, color=color)
     for i in range(len(d['object'])):
         box = [d['object'][i]['xmin'], d['object'][i]['ymin'], d['object'][i]['xmax'], d['object'][i]['ymax']]
         im = add_bbox(im, box, 2, ['ov', 'mif', 'obj'], show_txt=False, color=(0, 200, 0))
